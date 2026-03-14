@@ -4,11 +4,10 @@ import { createServer } from "node:http";
 import { WebSocketServer } from "ws";
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { AuthenticationError } from "./customErrors.js"
+import { AuthenticationError, DatabaseError } from "./customErrors.js"
 import { config } from "./config.js";
 import * as db  from "./db/index.js";
 import { makeJWT, validateJWT, hashPassword, checkPasswordHash, getBearerToken } from "./auth.js";
-import { Pool } from "undici-types";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.join(path.dirname(__filename), "../");
@@ -71,7 +70,7 @@ app.post("/login", async (req: Request, res: Response) => {
 
 
 app.get("/home", (req: Request, res: Response) => {
-        res.status(200).sendFile(mainPage);
+    res.status(200).sendFile(mainPage);
 });
 
 app.get("/chats", async (req: Request, res: Response) => {
@@ -81,12 +80,20 @@ app.get("/chats", async (req: Request, res: Response) => {
     res.status(200).setHeader("Content-Type", "application/json").send(JSON.stringify(chats));
 });
 
+app.get("/chats/:chat_id", async (req: Request<{chat_id: string;}>, res: Response) => {
+    const token = getBearerToken(req);
+    const user_id = validateJWT(token, config.secret);
+    const chat_id = req.params.chat_id;
+    const messages = await db.getChatMessages(chat_id, user_id);
+    res.status(200).setHeader("Content-Type", "application/json").send(JSON.stringify(messages));
+});
+
 app.post("/chats", async (req: Request, res: Response) => {
     const token = getBearerToken(req);
     const user_id = validateJWT(token, config.secret);
     const { name } = req.body;
-    await db.createChat(name, user_id);
-    res.status(200).setHeader("Content-Type", "application/json").send(JSON.stringify({"message": "chat successfully created"}));
+    const chat = await db.createChat(name, user_id);
+    res.status(200).setHeader("Content-Type", "application/json").send(JSON.stringify(chat));
 });
 
 wss.on('connection', (socket) => {
@@ -151,6 +158,9 @@ function errorHandler(err: Error, req: Request, res: Response, next: NextFunctio
         errorPayload.error = err.message;
         console.error("AuthenticationError: ", err.message);
        res.status(401).send(JSON.stringify(errorPayload));
+    } else if(err instanceof DatabaseError) {
+        console.error("Database Error: ", err.message);
+        res.status(400).send(JSON.stringify({message: "Invalid data requested"}))
     } else if(err instanceof Error) {
         console.error("Error: ", err.message);
         res.status(500).send(JSON.stringify(errorPayload));
