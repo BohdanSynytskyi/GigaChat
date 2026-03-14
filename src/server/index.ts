@@ -104,7 +104,6 @@ wss.on('connection', (socket) => {
   socket.on('message', (message) => {
     console.log('Received:', message.toString());
 
-    socket.send(`You said: ${message}`);
   });
 
   socket.on('close', () => {
