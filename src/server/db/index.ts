@@ -8,15 +8,15 @@ export const pool = new Pool({
 });
 
 export type User = {
-    userId: string,
-    createdAt: Date,
+    user_id: string,
+    created_at: Date,
     email: string,
     hashed_password: string
 };
 
 export type Chat = {
-    chatId: string,
-    createdAt: Date,
+    chat_id: string,
+    created_at: Date,
     name: string,
 };
 
@@ -40,18 +40,18 @@ export const getUser = async (login: string): Promise<User> => {
     return res.rows[0];
 };
 
-export const getChats = async (userId: string): Promise<Chat[]> => {
-    const text = "SELECT * FROM chats";
-    const res = await pool.query(text);
+export const getChats = async (user_id: string): Promise<Chat[]> => {
+    const text = "SELECT * FROM chats WHERE chat_id IN (SELECT chat_id FROM chat_members WHERE user_id = $1)";
+    const res = await pool.query(text, [user_id]);
     if(res.rows[0] === undefined){
         throw new Error("There is no chats in the database");
     }
     return res.rows;
 };
 
-export const createChat = async (chatName: string, userId: string): Promise<void> => {
-    const chatText = "INSERT INTO chats(id, created_at, name) VALUES(DEFAULT, DEFAULT, $1) RETURNING *";
+export const createChat = async (chatName: string, user_id: string): Promise<void> => {
+    const chatText = "INSERT INTO chats(chat_id, created_at, name) VALUES(DEFAULT, DEFAULT, $1) RETURNING *";
     const chat = await pool.query(chatText, [chatName]);
     const userText = "INSERT INTO chat_members(chat_id, user_id) VALUES($1, $2)";
-    await pool.query(userText, [chat.rows[0].id, userId]);
+    await pool.query(userText, [chat.rows[0].chat_id, user_id]);
 };

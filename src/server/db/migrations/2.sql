@@ -1,5 +1,5 @@
 CREATE TABLE chats (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    chat_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     created_at TIMESTAMP DEFAULT now(),
     name VARCHAR(20) DEFAULT 'chat'
 );

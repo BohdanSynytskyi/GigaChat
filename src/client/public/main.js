@@ -1,11 +1,10 @@
 const URL = "http://localhost:8080";
-
-document.addEventListener("DOMContentLoaded", async (event) => {
+async function getChatButtons(event) {
     const chatsContainer = document.getElementById("chats");
     const res = await fetch(`${URL}/chats`, {
         method: "GET",
         headers: {
-            "Authorization": `Bearer  ${localStorage.getItem("token")}`,
+            "Authorization": `Bearer ${localStorage.getItem("token")}`,
         }
     });
     console.log(`Bearer  ${localStorage.getItem("token")}`);
@@ -22,7 +21,25 @@ document.addEventListener("DOMContentLoaded", async (event) => {
     } else {
         chatsContainer.innerText = "There are no chatrooms associated with you account";
     }   
+}
+
+document.addEventListener("DOMContentLoaded", getChatButtons);
+
+document.getElementById("create_chat").addEventListener("click", async (event) => {
+    const chatName = document.getElementById("chat_name").value.trim();
+    await fetch(`${URL}/chats`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify({ name: chatName})
+    });
+    getChatButtons();
 });
+
+
+
 //const URL = "ws://localhost:8080"
 //const ws = new WebSocket(URL);
 

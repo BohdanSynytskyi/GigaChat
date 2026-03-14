@@ -42,7 +42,7 @@ app.post("/signup", async (req: Request, res: Response) => {
     const hashedPassword = await hashPassword(password)
     const user = await db.addUser(login, hashedPassword);
     console.log(`User with name ${login} created`);
-    const token = makeJWT(user.userId, 3600, config.secret);
+    const token = makeJWT(user.user_id, 3600, config.secret);
 
     res.setHeader("Content-Type", "application/json");
     res.status(200).send(JSON.stringify({token: token}));
@@ -61,8 +61,7 @@ app.post("/login", async (req: Request, res: Response) => {
     
     const user = await db.getUser(login);
     if(user.email === login && await checkPasswordHash(password, user.hashed_password)){
-        const token = makeJWT(user.userId, 3600, config.secret);
-        console.log("Issued token: ", token);
+        const token = makeJWT(user.user_id, 3600, config.secret);
         res.setHeader("Content-Type", "application/json");
         res.status(200).send(JSON.stringify({token: token}));
     } else {
@@ -77,11 +76,17 @@ app.get("/home", (req: Request, res: Response) => {
 
 app.get("/chats", async (req: Request, res: Response) => {
     const token = getBearerToken(req);
-    console.log("Authorization header:", req.get("Authorization"));
-    console.log("Bearer Token after extraction: ", token);
-    const userId = validateJWT(token, config.secret);
-    const chats = await db.getChats(userId);
+    const user_id = validateJWT(token, config.secret);
+    const chats = await db.getChats(user_id);
     res.status(200).setHeader("Content-Type", "application/json").send(JSON.stringify(chats));
+});
+
+app.post("/chats", async (req: Request, res: Response) => {
+    const token = getBearerToken(req);
+    const user_id = validateJWT(token, config.secret);
+    const { name } = req.body;
+    await db.createChat(name, user_id);
+    res.status(200).setHeader("Content-Type", "application/json").send(JSON.stringify({"message": "chat successfully created"}));
 });
 
 wss.on('connection', (socket) => {
@@ -108,6 +113,7 @@ server.listen(httpPort, () => {
 
 function middlewareLogResponses(req: Request, res: Response, next: NextFunction){
     res.on("finish", () => {
+        if(req.originalUrl === "/.well-known/appspecific/com.chrome.devtools.json") return;
         if(res.statusCode !== 200){
             console.log(`[NON-OK] ${req.method} ${req.url} - Status: ${res.statusCode}`);
         } else {
