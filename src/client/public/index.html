@@ -1,6 +1,7 @@
 <html>
     <head>
         <title>Chatroom</title>
+        <link rel="stylesheet" href="/public/styles.css">
     </head>
     <body>
         <h1>Welcome to GigaChat!</h1>
@@ -8,6 +9,17 @@
         <div id="chats"></div>
         <button id="create_chat">Create chat</button>
         <input id="chat_name" placeholder="New chat name" />
+        <div class="chat-container">
+          <div id="chat-window" class="chat-window">
+            <div class="message received">Hello! How can I help?</div>
+            <div class="message sent">I'm looking to build a chatroom.</div>
+          </div>
+
+          <div class="chat-input-area">
+            <input type="text" id="message-input" placeholder="Type a message...">
+            <button id="send-btn">Send</button>
+          </div>
+        </div>
         <script src="/public/main.js"></script>
     </body>
 </html>

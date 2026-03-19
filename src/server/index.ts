@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { AuthenticationError, DatabaseError } from "./customErrors.js"
 import { config } from "./config.js";
 import * as db  from "./db/index.js";
-import { makeJWT, validateJWT, hashPassword, checkPasswordHash, getBearerToken, getBearerTokenUpgrade } from "./auth.js";
+import { makeJWT, validateJWT, hashPassword, checkPasswordHash, getBearerToken  } from "./auth.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.join(path.dirname(__filename), "../");
@@ -86,7 +86,7 @@ app.get("/chats/:chat_id", async (req: Request<{chat_id: string;}>, res: Respons
     const token = getBearerToken(req);
     const user_id = validateJWT(token, config.secret);
     const chat_id = req.params.chat_id;
-    const messages = await db.getChatMessages(chat_id, user_id);
+    const messages: db.Message[] = await db.getChatMessages(chat_id, user_id);
     res.status(200).setHeader("Content-Type", "application/json").send(JSON.stringify(messages));
 });
 
@@ -100,13 +100,13 @@ app.post("/chats", async (req: Request, res: Response) => {
 
 server.on('upgrade', (req: IncomingMessage, socket, head) => {
     try {
-        const token = getBearerTokenUpgrade(req);
-        const user_id = validateJWT(token, config.secret);
         const url = new URL(req.url!, `http://localhost:8080`);
+        const token = url.searchParams.get("token");
         const chat_id = url.searchParams.get("chat_id");
-        if(chat_id === null) {
+        if(chat_id === null || token == null) {
             throw new Error("Invalid upgrade request. There is no chat_id in the query");
         }
+        const user_id = validateJWT(token, config.secret);
         wss.handleUpgrade(req, socket, head, (ws, req) => {
             const websocket: AuthWebSocket = ws as AuthWebSocket;
             websocket.user_id = user_id;
@@ -121,6 +121,7 @@ server.on('upgrade', (req: IncomingMessage, socket, head) => {
         });
     } catch(e) {
         if(e instanceof AuthenticationError) {
+            console.error("Error while processing upgrade request: ", e.message);
             socket.write(
                 'HTTP/1.1 401 Unauthorized\r\n' +
                 'Connection: close\r\n' +
@@ -128,7 +129,11 @@ server.on('upgrade', (req: IncomingMessage, socket, head) => {
             );
             socket.destroy();
             return;
+        } else if(e instanceof Error) {
+            console.error("Error while processing upgrade request: ", e.message);
+            socket.destroy();
         }
+
     }
 });
 

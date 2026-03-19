@@ -46,33 +46,6 @@ export function getBearerToken(req: Request): string {
     return token;
 }
 
-
-export function getBearerTokenUpgrade(req: IncomingMessage): string {
-    const authHeader = req.headers.authorization;
-
-    if (!authHeader) {
-        throw new AuthenticationError("Authorization header missing");
-    }
-
-    const pieces = authHeader.trim().split(/\s+/);
-
-    if (pieces.length !== 2) {
-        throw new AuthenticationError("Invalid authorization header format");
-    }
-
-    const [scheme, token] = pieces;
-
-    if (scheme !== "Bearer") {
-        throw new AuthenticationError("Invalid authorization scheme");
-    }
-
-    if (!token) {
-        throw new AuthenticationError("JWT must be provided");
-    }
-
-    return token;
-}
-
 export function getAPIKey(req: Request): string {
     try {
         const token = req.get("Authorization");
