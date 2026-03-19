@@ -1,13 +1,14 @@
 import express from "express";
 import type { Request, Response, NextFunction } from "express";
-import { createServer } from "node:http";
-import { WebSocketServer } from "ws";
+import type { AuthWebSocket } from "./customTypes.js";
+import { createServer, type IncomingMessage } from "node:http";
+import { WebSocketServer, WebSocket } from "ws";
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AuthenticationError, DatabaseError } from "./customErrors.js"
 import { config } from "./config.js";
 import * as db  from "./db/index.js";
-import { makeJWT, validateJWT, hashPassword, checkPasswordHash, getBearerToken } from "./auth.js";
+import { makeJWT, validateJWT, hashPassword, checkPasswordHash, getBearerToken, getBearerTokenUpgrade } from "./auth.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.join(path.dirname(__filename), "../");
@@ -18,7 +19,8 @@ const app = express();
 const httpPort = 8080;
 
 const server = createServer(app);
-const wss = new WebSocketServer({ server: server });
+const wss = new WebSocketServer({ noServer: true });
+const chatToClients = new Map();
 
 app.use("/public", express.static("./src/client/public"));
 app.use(express.urlencoded({extended: true}));
@@ -96,20 +98,60 @@ app.post("/chats", async (req: Request, res: Response) => {
     res.status(200).setHeader("Content-Type", "application/json").send(JSON.stringify(chat));
 });
 
-wss.on('connection', (socket) => {
-  console.log('Client connected');
+server.on('upgrade', (req: IncomingMessage, socket, head) => {
+    try {
+        const token = getBearerTokenUpgrade(req);
+        const user_id = validateJWT(token, config.secret);
+        const url = new URL(req.url!, `http://localhost:8080`);
+        const chat_id = url.searchParams.get("chat_id");
+        if(chat_id === null) {
+            throw new Error("Invalid upgrade request. There is no chat_id in the query");
+        }
+        wss.handleUpgrade(req, socket, head, (ws, req) => {
+            const websocket: AuthWebSocket = ws as AuthWebSocket;
+            websocket.user_id = user_id;
+            websocket.chat_id = chat_id;
+            if(chatToClients.has(chat_id)){
+                chatToClients.get(chat_id).push(websocket);
+            } else {
+                chatToClients.set(chat_id, []);
+                chatToClients.get(chat_id).push(websocket);
+            }
+            wss.emit('connection', websocket, req);
+        });
+    } catch(e) {
+        if(e instanceof AuthenticationError) {
+            socket.write(
+                'HTTP/1.1 401 Unauthorized\r\n' +
+                'Connection: close\r\n' +
+                '\r\n'
+            );
+            socket.destroy();
+            return;
+        }
+    }
+});
 
-  socket.send('Hello from server');
+wss.on('connection', (ws: AuthWebSocket, req: IncomingMessage) => {
+  console.log(`Client with user_id: ${ws.user_id} connected to chat_id: ${ws.chat_id}`);
 
-  socket.on('message', (message) => {
-    console.log('Received:', message.toString());
-
+  ws.on('message', async (message) => {
+    const content = message.toString();
+    await db.insertChatMessage(ws.chat_id, ws.user_id, content);
+    chatToClients.get(ws.chat_id).forEach((client: AuthWebSocket) => {
+        client.send(JSON.stringify({sender_id: ws.user_id, message: content}));
+    });
   });
 
-  socket.on('close', () => {
-    console.log('Client disconnected');
+  ws.on('close', () => {
+    console.log(`Client with user_id: ${(ws as any).user} disconnected`);
+  });
+  ws.on('error', (error: Error) => {
+      console.error("Web Socket Server error: ", error.message);
+      ws.close();
   });
 });
+
 
 app.use(errorHandler);
 
@@ -131,6 +173,9 @@ function middlewareLogResponses(req: Request, res: Response, next: NextFunction)
 
 async function shutdown() {
     console.log("Shutting down server...");
+    wss.clients.forEach((client: WebSocket) => {
+        client.close();
+    });
     wss.close();
     server.close(async () => {
         try {
