@@ -80,7 +80,7 @@ export const createChat = async (chatName: string, user_id: string): Promise<Cha
 
 export const getChatMessages = async (chat_id: string, user_id: string): Promise<Message[]> => {
     try {
-        const queryText = "SELECT * FROM messages WHERE chat_id IN (SELECT chat_id FROM chat_members WHERE chat_id = $1 AND user_id = $2) ORDER BY created_at DESC";
+        const queryText = "SELECT * FROM messages WHERE chat_id IN (SELECT chat_id FROM chat_members WHERE chat_id = $1 AND user_id = $2) ORDER BY created_at ASC";
         const res = await pool.query(queryText, [chat_id, user_id]);
         let messages: Message[] = [];
         if(res.rowCount && res.rowCount > 0) {

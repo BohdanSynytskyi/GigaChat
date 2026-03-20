@@ -64,7 +64,7 @@ app.post("/login", async (req: Request, res: Response) => {
     if(user.email === login && await checkPasswordHash(password, user.hashed_password)){
         const token = makeJWT(user.user_id, 3600, config.secret);
         res.setHeader("Content-Type", "application/json");
-        res.status(200).send(JSON.stringify({token: token}));
+        res.status(200).send(JSON.stringify({token: token, user_id: user.user_id}));
     } else {
         res.status(400).send("Invalid login or password.");
     }
@@ -112,7 +112,13 @@ server.on('upgrade', (req: IncomingMessage, socket, head) => {
             websocket.user_id = user_id;
             websocket.chat_id = chat_id;
             if(chatToClients.has(chat_id)){
-                chatToClients.get(chat_id).push(websocket);
+                const clients: AuthWebSocket[] = chatToClients.get(chat_id);
+                for(const client of clients) {
+                    if(client.user_id === websocket.user_id) {
+                        throw new Error("There already exists a connection with this client");
+                    }
+                }
+                clients.push(websocket);
             } else {
                 chatToClients.set(chat_id, []);
                 chatToClients.get(chat_id).push(websocket);
@@ -144,13 +150,21 @@ wss.on('connection', (ws: AuthWebSocket, req: IncomingMessage) => {
     const content = message.toString();
     await db.insertChatMessage(ws.chat_id, ws.user_id, content);
     chatToClients.get(ws.chat_id).forEach((client: AuthWebSocket) => {
-        client.send(JSON.stringify({sender_id: ws.user_id, message: content}));
+        client.send(JSON.stringify({sender_id: ws.user_id, content: content}));
     });
   });
 
   ws.on('close', () => {
-    console.log(`Client with user_id: ${(ws as any).user} disconnected`);
+    console.log(`Client with user_id: ${ws.user_id} disconnected`);
+    const chatMembers: AuthWebSocket[] = chatToClients.get(ws.chat_id);
+    for(let i = 0; i < chatMembers.length; i++) {
+        if(chatMembers[i].user_id === ws.user_id) {
+            chatMembers.splice(i, 1);
+            break;
+        }
+    }
   });
+
   ws.on('error', (error: Error) => {
       console.error("Web Socket Server error: ", error.message);
       ws.close();

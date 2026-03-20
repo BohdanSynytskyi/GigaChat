@@ -16,9 +16,10 @@ form.onsubmit = async (event) => {
         body: payload,
     });
     const result = await response.json();
-    if(response.ok && result.token){
+    if(response.ok && result.token && result.user_id){
         token = result.token;
-        localStorage.setItem("token", token)
+        sessionStorage.setItem("token", token)
+        sessionStorage.setItem("user_id", result.user_id)
         window.location.href = "/home";
     } else {
         console.error("Login failed: ", result);
