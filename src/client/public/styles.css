@@ -1,3 +1,17 @@
+/* Classes for the chat selection and creation */
+.chat_list {
+  flex: 1;
+  background: #f9f9f9;
+  border: 0.5px solid black;
+  border-radius: 4px;
+  padding: 5px;
+}
+
+.chat_list_element {
+
+}
+
+/* Classes for the chat UI */
 .chat-container {
   display: flex;
   flex-direction: column;
