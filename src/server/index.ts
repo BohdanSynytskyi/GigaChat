@@ -1,4 +1,6 @@
 import express from "express";
+import cookieParser from "cookie-parser";
+import { parse } from "cookie";
 import type { Request, Response, NextFunction } from "express";
 import type { AuthWebSocket } from "./customTypes.js";
 import { createServer, type IncomingMessage } from "node:http";
@@ -8,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { AuthenticationError, DatabaseError } from "./customErrors.js"
 import { config } from "./config.js";
 import * as db  from "./db/index.js";
-import { makeJWT, validateJWT, hashPassword, checkPasswordHash, getBearerToken  } from "./auth.js";
+import { makeJWT, validateJWT, authorize, hashPassword, checkPasswordHash } from "./auth.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.join(path.dirname(__filename), "../");
@@ -17,6 +19,7 @@ const publicFilesDir = path.join(__dirname, "./src/client/public");
 
 const app = express();
 const httpPort = 8080;
+const HOST = '0.0.0.0';
 
 const server = createServer(app);
 const wss = new WebSocketServer({ noServer: true });
@@ -24,7 +27,7 @@ const chatToClients = new Map();
 
 app.use("/public", express.static("./src/client/public"));
 app.use(express.urlencoded({extended: true}));
-app.use(middlewareLogResponses, express.json());
+app.use(middlewareLogResponses, express.json(), cookieParser());
 
 app.get("/", (req: Request, res: Response) => {
     res.redirect('/login');
@@ -46,7 +49,8 @@ app.post("/signup", async (req: Request, res: Response) => {
     const token = makeJWT(user.user_id, 3600, config.secret);
 
     res.setHeader("Content-Type", "application/json");
-    res.status(200).send(JSON.stringify({token: token}));
+    res.cookie('token', token);
+    res.status(200).send(JSON.stringify({user_id: user.user_id}));
 });
 
 
@@ -64,7 +68,8 @@ app.post("/login", async (req: Request, res: Response) => {
     if(user.email === login && await checkPasswordHash(password, user.hashed_password)){
         const token = makeJWT(user.user_id, 3600, config.secret);
         res.setHeader("Content-Type", "application/json");
-        res.status(200).send(JSON.stringify({token: token, user_id: user.user_id}));
+        res.cookie('token', token);
+        res.status(200).send(JSON.stringify({user_id: user.user_id}));
     } else {
         res.status(400).send("Invalid login or password.");
     }
@@ -76,23 +81,20 @@ app.get("/home", (req: Request, res: Response) => {
 });
 
 app.get("/chats", async (req: Request, res: Response) => {
-    const token = getBearerToken(req);
-    const user_id = validateJWT(token, config.secret);
+    const user_id = authorize(req);
     const chats = await db.getChats(user_id);
     res.status(200).setHeader("Content-Type", "application/json").send(JSON.stringify(chats));
 });
 
 app.get("/chats/:chat_id", async (req: Request<{chat_id: string;}>, res: Response) => {
-    const token = getBearerToken(req);
-    const user_id = validateJWT(token, config.secret);
+    const user_id = authorize(req);
     const chat_id = req.params.chat_id;
     const messages: db.Message[] = await db.getChatMessages(chat_id, user_id);
     res.status(200).setHeader("Content-Type", "application/json").send(JSON.stringify(messages));
 });
 
 app.post("/chats", async (req: Request, res: Response) => {
-    const token = getBearerToken(req);
-    const user_id = validateJWT(token, config.secret);
+    const user_id = authorize(req);
     const { name } = req.body;
     const chat = await db.createChat(name, user_id);
     res.status(200).setHeader("Content-Type", "application/json").send(JSON.stringify(chat));
@@ -101,10 +103,14 @@ app.post("/chats", async (req: Request, res: Response) => {
 server.on('upgrade', (req: IncomingMessage, socket, head) => {
     try {
         const url = new URL(req.url!, `http://localhost:8080`);
-        const token = url.searchParams.get("token");
         const chat_id = url.searchParams.get("chat_id");
-        if(chat_id === null || token == null) {
-            throw new Error("Invalid upgrade request. There is no chat_id in the query");
+        const cookies = req.headers.cookie;
+        if(chat_id === null || cookies === undefined) {
+            throw new Error("Invalid upgrade request. There is no chat_id in the query or cookie file is corrupted");
+        }
+        const token = parse(cookies).token;
+        if(token === undefined) {
+            throw new AuthenticationError("JWT token is not provided");
         }
         const user_id = validateJWT(token, config.secret);
         wss.handleUpgrade(req, socket, head, (ws, req) => {

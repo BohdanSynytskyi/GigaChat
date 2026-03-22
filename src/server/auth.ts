@@ -4,7 +4,7 @@ import type { JwtPayload } from "jsonwebtoken";
 import type { Request } from "express";
 import { randomBytes } from "node:crypto";
 import { AuthenticationError } from "./customErrors.js";
-import { IncomingMessage } from "node:http";
+import { config } from "./config.js";
 
 type payload = Pick<JwtPayload, "iss" | "sub" | "iat" | "exp">;
 
@@ -20,24 +20,8 @@ export async function checkPasswordHash(password: string | undefined, hash: stri
     return await verify(hash, password);
 }
 
-export function getBearerToken(req: Request): string {
-    const authHeader = req.get("Authorization");
-
-    if (!authHeader) {
-        throw new AuthenticationError("Authorization header missing");
-    }
-
-    const pieces = authHeader.trim().split(/\s+/);
-
-    if (pieces.length !== 2) {
-        throw new AuthenticationError("Invalid authorization header format");
-    }
-
-    const [scheme, token] = pieces;
-
-    if (scheme !== "Bearer") {
-        throw new AuthenticationError("Invalid authorization scheme");
-    }
+function getBearerToken(req: Request): string {
+    const token = req.cookies.token;
 
     if (!token) {
         throw new AuthenticationError("JWT must be provided");
@@ -45,6 +29,13 @@ export function getBearerToken(req: Request): string {
 
     return token;
 }
+
+// Extracts token from the request object and returns the associated user_id
+export function authorize(req: Request): string {
+    const token = getBearerToken(req);
+    return validateJWT(token, config.secret);
+}
+
 
 export function getAPIKey(req: Request): string {
     try {

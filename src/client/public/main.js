@@ -4,11 +4,8 @@ async function getChatButtons(event) {
     chatsContainer.value = null;
     const res = await fetch(`${URL}/chats`, {
         method: "GET",
-        headers: {
-            "Authorization": `Bearer ${sessionStorage.getItem("token")}`,
-        }
     });
-    console.log(`Bearer  ${sessionStorage.getItem("token")}`);
+    
     const chats = await res.json();
     if(res.ok && chats){
         for(const chat of chats) {
@@ -46,9 +43,6 @@ async function createChatRoom(chatId) {
 async function getChatMessages(chatId) {
     const res = await fetch(`${URL}/chats/${chatId}`, {
         method: "GET",
-        headers: {
-            "Authorization": `Bearer ${sessionStorage.getItem("token")}`,
-        }
     });
     const messages = await res.json();
     return messages;
@@ -57,7 +51,7 @@ async function getChatMessages(chatId) {
 
 
 function startWebSocketConnection(chatId, chatWindow) {
-    const URL = `ws://localhost:8080?chat_id=${chatId}&token=${sessionStorage.getItem("token")}`
+    const URL = `ws://localhost:8080?chat_id=${chatId}`
     const ws = new WebSocket(URL);
     
     ws.addEventListener('open', (event) => {
@@ -93,7 +87,6 @@ document.getElementById("create_chat").addEventListener("click", async (event) =
         method: "POST",
         headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${sessionStorage.getItem("token")}`,
         },
         body: JSON.stringify({ name: chatName})
     });
