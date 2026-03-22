@@ -7,16 +7,25 @@ async function getChatButtons(event) {
     });
     
     const chats = await res.json();
-    if(res.ok && chats){
-        for(const chat of chats) {
-            const newButton = document.createElement("button")
-            newButton.textContent = chat.name;
-            newButton.addEventListener('click', () => createChatRoom(chat.chat_id));
-            chatsContainer.append(newButton);
-        }
+    console.log(chats);
+    if(res.ok){
+        if(chats.length > 0) {
+            for(const chat of chats) {
+                const newButton = document.createElement("button")
+                newButton.textContent = chat.name;
+                newButton.addEventListener('click', () => createChatRoom(chat.chat_id));
+                chatsContainer.append(newButton);
+                for(const member of chat.members){
+                    sessionStorage.setItem(member.user_id, member.name);
+                    console.log(`Just set ${member.user_id} to ${member.name}`);
+                }
+            }
+        } else {
+            chatsContainer.textContent = "There are no chatrooms associated with you account";
+        }   
     } else {
-        chatsContainer.value = "There are no chatrooms associated with you account";
-    }   
+        window.location.href = "/login";
+    }
 }
 
 async function createChatRoom(chatId) {
@@ -26,10 +35,10 @@ async function createChatRoom(chatId) {
     if(messages.length > 0) {
         for(const message of messages) {
             const msgDiv = document.createElement('div');
-            console.log(`Sender_id: ${message.sender_id}, User_id: ${sessionStorage.getItem("user_id")}`);
             msgDiv.className =  message.sender_id === sessionStorage.getItem("user_id") 
                                                 ? 'message sent' : 'message received';
-            msgDiv.textContent = message.content;
+            const senderName = sessionStorage.getItem(message.sender_id);
+            msgDiv.textContent = `${senderName}: ${message.content}`;
             chatWindow.appendChild(msgDiv);
         }
     }

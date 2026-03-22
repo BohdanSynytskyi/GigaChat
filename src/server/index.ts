@@ -100,6 +100,12 @@ app.post("/chats", async (req: Request, res: Response) => {
     res.status(200).setHeader("Content-Type", "application/json").send(JSON.stringify(chat));
 });
 
+app.get("/users", async (req: Request, res: Response) => {
+    const user_id = authorize(req);
+    const users = await db.getUserEmails();
+    res.status(200).setHeader("Content-Type", "application/json").send(JSON.stringify(users));
+});
+
 server.on('upgrade', (req: IncomingMessage, socket, head) => {
     try {
         const url = new URL(req.url!, `http://localhost:8080`);

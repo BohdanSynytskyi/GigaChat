@@ -39,6 +39,16 @@ export const addUser = async (login: string, hashed_password: string): Promise<U
 };
 
 
+export const getUserEmails = async (): Promise<string[]> => {
+    const text = "SELECT * FROM users";
+    const res = await pool.query(text);
+    const output: string[] = [];
+    res.rows.forEach((row: User) => {
+        output.push(row.email);
+    });
+    return output;
+};
+
 export const getUser = async (login: string): Promise<User> => {
     const text = "SELECT * FROM users WHERE email = $1";
     const res = await pool.query(text, [login]);
@@ -50,7 +60,25 @@ export const getUser = async (login: string): Promise<User> => {
 
 export const getChats = async (user_id: string): Promise<Chat[]> => {
     try {
-    const text = "SELECT * FROM chats WHERE chat_id IN (SELECT chat_id FROM chat_members WHERE user_id = $1)";
+    const text = `SELECT
+        c.chat_id,
+        c.name,
+        json_agg(
+            json_build_object(
+                'user_id', u.user_id,
+                'name', u.email
+            )
+        ) AS members
+    FROM chats c
+    JOIN chat_members my_cm
+        ON my_cm.chat_id = c.chat_id
+    JOIN chat_members all_cm
+        ON all_cm.chat_id = c.chat_id
+    JOIN users u
+        ON u.user_id = all_cm.user_id
+    WHERE my_cm.user_id = $1
+    GROUP BY c.chat_id;`;
+
     const res = await pool.query(text, [user_id]);
     return res.rows;
     } catch(e: unknown) {
