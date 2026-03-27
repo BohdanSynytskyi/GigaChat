@@ -1,10 +1,6 @@
 import express from "express";
 import cookieParser from "cookie-parser";
-import { parse } from "cookie";
 import type { Request, Response, NextFunction } from "express";
-import type { AuthWebSocket } from "./customTypes.js";
-import { createServer, type IncomingMessage } from "node:http";
-import { WebSocketServer, WebSocket } from "ws";
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AuthenticationError, DatabaseError } from "./customErrors.js"
@@ -13,17 +9,13 @@ import * as db  from "./db/index.js";
 import { makeJWT, validateJWT, authorize, hashPassword, checkPasswordHash } from "./auth.js";
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.join(path.dirname(__filename), "../");
+const __dirname = path.join(path.dirname(__filename), "../../");
 const mainPage = path.join(__dirname, "./src/client/public/index.html");
 const publicFilesDir = path.join(__dirname, "./src/client/public");
 
 const app = express();
 const httpPort = 8080;
 const HOST = '0.0.0.0';
-
-const server = createServer(app);
-const wss = new WebSocketServer({ noServer: true });
-const chatToClients = new Map();
 
 app.use("/public", express.static("./src/client/public"));
 app.use(express.urlencoded({extended: true}));
@@ -80,20 +72,20 @@ app.get("/home", (req: Request, res: Response) => {
     res.status(200).sendFile(mainPage);
 });
 
-app.get("/chats", async (req: Request, res: Response) => {
+app.get("/api/chats", async (req: Request, res: Response) => {
     const user_id = authorize(req);
     const chats = await db.getChats(user_id);
     res.status(200).setHeader("Content-Type", "application/json").send(JSON.stringify(chats));
 });
 
-app.get("/chats/:chat_id", async (req: Request<{chat_id: string;}>, res: Response) => {
+app.get("/api/chats/:chat_id", async (req: Request<{chat_id: string;}>, res: Response) => {
     const user_id = authorize(req);
     const chat_id = req.params.chat_id;
     const messages: db.Message[] = await db.getChatMessages(chat_id, user_id);
     res.status(200).setHeader("Content-Type", "application/json").send(JSON.stringify(messages));
 });
 
-app.post("/chats", async (req: Request, res: Response) => {
+app.post("/api/chats", async (req: Request, res: Response) => {
     const user_id = authorize(req);
     const { name } = req.body;
     const chat = await db.createChat(name, user_id);
@@ -106,87 +98,11 @@ app.get("/users", async (req: Request, res: Response) => {
     res.status(200).setHeader("Content-Type", "application/json").send(JSON.stringify(users));
 });
 
-server.on('upgrade', (req: IncomingMessage, socket, head) => {
-    try {
-        const url = new URL(req.url!, `http://localhost:8080`);
-        const chat_id = url.searchParams.get("chat_id");
-        const cookies = req.headers.cookie;
-        if(chat_id === null || cookies === undefined) {
-            throw new Error("Invalid upgrade request. There is no chat_id in the query or cookie file is corrupted");
-        }
-        const token = parse(cookies).token;
-        if(token === undefined) {
-            throw new AuthenticationError("JWT token is not provided");
-        }
-        const user_id = validateJWT(token, config.secret);
-        wss.handleUpgrade(req, socket, head, (ws, req) => {
-            const websocket: AuthWebSocket = ws as AuthWebSocket;
-            websocket.user_id = user_id;
-            websocket.chat_id = chat_id;
-            if(chatToClients.has(chat_id)){
-                const clients: AuthWebSocket[] = chatToClients.get(chat_id);
-                for(const client of clients) {
-                    if(client.user_id === websocket.user_id) {
-                        throw new Error("There already exists a connection with this client");
-                    }
-                }
-                clients.push(websocket);
-            } else {
-                chatToClients.set(chat_id, []);
-                chatToClients.get(chat_id).push(websocket);
-            }
-            wss.emit('connection', websocket, req);
-        });
-    } catch(e) {
-        if(e instanceof AuthenticationError) {
-            console.error("Error while processing upgrade request: ", e.message);
-            socket.write(
-                'HTTP/1.1 401 Unauthorized\r\n' +
-                'Connection: close\r\n' +
-                '\r\n'
-            );
-            socket.destroy();
-            return;
-        } else if(e instanceof Error) {
-            console.error("Error while processing upgrade request: ", e.message);
-            socket.destroy();
-        }
-
-    }
-});
-
-wss.on('connection', (ws: AuthWebSocket, req: IncomingMessage) => {
-  console.log(`Client with user_id: ${ws.user_id} connected to chat_id: ${ws.chat_id}`);
-
-  ws.on('message', async (message) => {
-    const content = message.toString();
-    await db.insertChatMessage(ws.chat_id, ws.user_id, content);
-    chatToClients.get(ws.chat_id).forEach((client: AuthWebSocket) => {
-        client.send(JSON.stringify({sender_id: ws.user_id, content: content}));
-    });
-  });
-
-  ws.on('close', () => {
-    console.log(`Client with user_id: ${ws.user_id} disconnected`);
-    const chatMembers: AuthWebSocket[] = chatToClients.get(ws.chat_id);
-    for(let i = 0; i < chatMembers.length; i++) {
-        if(chatMembers[i].user_id === ws.user_id) {
-            chatMembers.splice(i, 1);
-            break;
-        }
-    }
-  });
-
-  ws.on('error', (error: Error) => {
-      console.error("Web Socket Server error: ", error.message);
-      ws.close();
-  });
-});
 
 
 app.use(errorHandler);
 
-server.listen(httpPort, () => {
+const server = app.listen(httpPort, () => {
     console.log(`Server is listening on port ${httpPort}...`);
 });
 
@@ -204,10 +120,6 @@ function middlewareLogResponses(req: Request, res: Response, next: NextFunction)
 
 async function shutdown() {
     console.log("Shutting down server...");
-    wss.clients.forEach((client: WebSocket) => {
-        client.close();
-    });
-    wss.close();
     server.close(async () => {
         try {
             console.log("Shutting down the database...");

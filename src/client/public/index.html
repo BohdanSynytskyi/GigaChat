@@ -5,21 +5,23 @@
     </head>
     <body>
         <h1>Welcome to GigaChat!</h1>
-        <div class="chat_list">
-            <h3>Available chatrooms: </h3>
-            <div id="chats" class="chat_list_element"></div>
-            <div class="chat_list_element">
-              <button id="create_chat">Create chat</button>
-              <input id="chat_name" placeholder="New chat name" />
+        <div class="main_container">
+            <div class="chat_list">
+                <h3 class="chat_list_element">Available chatrooms: </h3>
+                <div id="chats" class="chat_list_element"></div>
+                <div class="chat_creation_form">
+                  <button id="create_chat">Create chat</button>
+                  <input id="chat_name" placeholder="New chat name" />
+                </div>
             </div>
-        </div>
-        <div class="chat-container">
-          <div id="chat-window" class="chat-window">
-          </div>
-          <div class="chat-input-area">
-            <input type="text" id="message-input" placeholder="Type a message...">
-            <button id="send-btn">Send</button>
-          </div>
+            <div class="chat-container">
+              <div id="chat-window" class="chat-window">
+              </div>
+              <div class="chat-input-area">
+                <input type="text" id="message-input" placeholder="Type a message...">
+                <button id="send-btn">Send</button>
+              </div>
+            </div>
         </div>
         <script src="/public/main.js"></script>
     </body>

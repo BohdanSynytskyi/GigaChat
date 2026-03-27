@@ -1,8 +1,8 @@
-const URL = "http://localhost:8080";
+const API_URL = "http://localhost:8080/api";
 async function getChatButtons(event) {
     const chatsContainer = document.getElementById("chats");
     chatsContainer.value = null;
-    const res = await fetch(`${URL}/chats`, {
+    const res = await fetch(`${API_URL}/chats`, {
         method: "GET",
     });
     
@@ -11,10 +11,11 @@ async function getChatButtons(event) {
     if(res.ok){
         if(chats.length > 0) {
             for(const chat of chats) {
-                const newButton = document.createElement("button")
-                newButton.textContent = chat.name;
-                newButton.addEventListener('click', () => createChatRoom(chat.chat_id));
-                chatsContainer.append(newButton);
+                const chatHeaderDiv = document.createElement("div")
+                chatHeaderDiv.textContent = chat.name;
+                chatHeaderDiv.className = 'chat_header';
+                chatHeaderDiv.addEventListener('click', () => createChatRoom(chat.chat_id));
+                chatsContainer.append(chatHeaderDiv);
                 for(const member of chat.members){
                     sessionStorage.setItem(member.user_id, member.name);
                     console.log(`Just set ${member.user_id} to ${member.name}`);
@@ -50,7 +51,7 @@ async function createChatRoom(chatId) {
 }
 
 async function getChatMessages(chatId) {
-    const res = await fetch(`${URL}/chats/${chatId}`, {
+    const res = await fetch(`${API_URL}/chats/${chatId}`, {
         method: "GET",
     });
     const messages = await res.json();
@@ -60,7 +61,7 @@ async function getChatMessages(chatId) {
 
 
 function startWebSocketConnection(chatId, chatWindow) {
-    const URL = `ws://localhost:8080?chat_id=${chatId}`
+    const URL = `ws://localhost:8081?chat_id=${chatId}`
     const ws = new WebSocket(URL);
     
     ws.addEventListener('open', (event) => {
@@ -92,7 +93,7 @@ document.addEventListener("DOMContentLoaded", getChatButtons);
 
 document.getElementById("create_chat").addEventListener("click", async (event) => {
     const chatName = document.getElementById("chat_name").value.trim();
-    await fetch(`${URL}/chats`, {
+    await fetch(`${API_URL}/chats`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",

@@ -7,7 +7,8 @@
   "scripts": {
     "run": "node dist/index.js",
     "build": "npx tsc",
-    "dev": "npx tsc && node dist/index.js",
+    "dev_http": "npx tsc && node dist/server/index.js",
+    "dev_ws": "npx tsc && node dist/wss/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
