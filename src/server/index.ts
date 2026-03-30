@@ -98,7 +98,15 @@ app.get("/users", async (req: Request, res: Response) => {
     res.status(200).setHeader("Content-Type", "application/json").send(JSON.stringify(users));
 });
 
-
+app.post("/api/users", async (req: Request, res: Response) => {
+    authorize(req);
+    const prefix: string = req.body.prefix;
+    if(prefix === undefined || prefix === null) {
+        throw new Error("Invalid request");
+    }
+    const users: db.UserThumbnail[] = await db.getUsersByPrefix(prefix);
+    res.status(200).setHeader("Content-Type", "application/json").send(JSON.stringify(users));
+});
 
 app.use(errorHandler);
 
@@ -123,7 +131,7 @@ async function shutdown() {
     server.close(async () => {
         try {
             console.log("Shutting down the database...");
-            await db.pool.end();
+            await db.closeDB();
             console.log("Database pool closed.");
             process.exit(0)
         } catch(e) {

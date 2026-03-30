@@ -2,10 +2,14 @@ import { Pool } from "pg";
 import { config } from "../config.js"
 import { AuthenticationError, DatabaseError } from "../customErrors.js";
 
-export const pool = new Pool({
+const pool = new Pool({
     connectionString: config.db_url,
     max: 5,
 });
+
+export async function closeDB() {
+    await pool.end();
+}
 
 export type Message = {
     message_id: string;
@@ -21,6 +25,8 @@ export type User = {
     email: string;
     hashed_password: string;
 };
+
+export type UserThumbnail = Pick<User, "user_id" | "email">;
 
 export type Chat = {
     chat_id: string;
@@ -57,6 +63,21 @@ export const getUser = async (login: string): Promise<User> => {
     }
     return res.rows[0];
 };
+
+// query for username/email autocomplete on the frontend side
+export const getUsersByPrefix = async (prefix: string): Promise<UserThumbnail[]> => {
+    try {
+        const text = `SELECT user_id, email FROM users WHERE email LIKE $1 || '%'`
+        const res = await pool.query(text, [prefix]);
+        return res.rows;
+    } catch (e: unknown) {
+        if(e instanceof Error){
+            throw new DatabaseError(e.message);
+        } else {
+            throw new DatabaseError("Unknown database error occured");
+        }
+    }
+}
 
 export const getChats = async (user_id: string): Promise<Chat[]> => {
     try {
